@@ -32,12 +32,15 @@ def create_app() -> FastAPI:
 
     # CORS middleware
     # Allow both localhost and 127.0.0.1 variants for development
+    # Also allow access from server IP for remote access
     allowed_origins = [
         settings.FRONTEND_URL,
         "http://localhost:3000",
         "http://localhost:13000",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:13000",
+        "http://10.37.254.168:3000",
+        "http://10.37.254.168:13000",
     ]
     app.add_middleware(
         CORSMiddleware,

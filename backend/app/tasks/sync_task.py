@@ -25,15 +25,15 @@ async def run_daily_sync():
 
         try:
             # Trigger sync
-            sync_id = await service.trigger_sync(
+            sync_id, version_id = await service.trigger_sync(
                 start_time=start_time,
                 end_time=end_time,
             )
-            logger.info("Sync job created", sync_id=sync_id)
+            logger.info("Sync job created", sync_id=sync_id, version_id=version_id)
 
             # Execute sync
             await service.execute_sync(sync_id)
-            logger.info("Daily sync completed", sync_id=sync_id)
+            logger.info("Daily sync completed", sync_id=sync_id, version_id=version_id)
 
         except Exception as e:
             logger.exception("Daily sync failed", error=str(e))

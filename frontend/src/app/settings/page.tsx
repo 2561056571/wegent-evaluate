@@ -4,10 +4,10 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { triggerSync, getSyncStatus } from '@/apis/sync'
 import { triggerEvaluation, getEvaluationStatus } from '@/apis/evaluation'
-import { getSettingsConfig, SettingsConfig } from '@/apis/settings'
+import { getSettingsConfig, setExternalApiBaseUrl, setExternalApiCredentials, SettingsConfig } from '@/apis/settings'
 import { generateWeeklyReport } from '@/apis/report'
 import { useVersion } from '@/contexts/VersionContext'
-import { Loader2, FileText, AlertTriangle, Copy, Check } from 'lucide-react'
+import { Loader2, FileText, AlertTriangle, Copy, Check, Save } from 'lucide-react'
 import type { SyncTriggerRequest, WeeklyReportResponse, DataVersion } from '@/types'
 
 // Format date to YYYY-MM-DD HH:mm:ss
@@ -68,12 +68,27 @@ export default function SettingsPage() {
   const [reportError, setReportError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
+  // External API Base URL state
+  const [externalApiBaseUrl, setExternalApiBaseUrl] = useState('')
+  const [savingApiUrl, setSavingApiUrl] = useState(false)
+  const [apiUrlMessage, setApiUrlMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  // External API Credentials state
+  const [apiUsername, setApiUsername] = useState('')
+  const [apiPassword, setApiPassword] = useState('')
+  const [savingCredentials, setSavingCredentials] = useState(false)
+  const [credentialsMessage, setCredentialsMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
   // Fetch settings config on mount
   useEffect(() => {
     const fetchConfig = async () => {
       try {
         const data = await getSettingsConfig()
         setConfig(data)
+        // Initialize external API base URL from config
+        setExternalApiBaseUrl(data.sync.external_api_base_url || '')
+        // Initialize external API username from config
+        setApiUsername(data.sync.external_api_username || '')
       } catch (error) {
         console.error('Failed to fetch settings config:', error)
       } finally {
@@ -257,6 +272,98 @@ export default function SettingsPage() {
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
       console.error('Failed to copy:', err)
+    }
+  }
+
+  // Handle save external API base URL
+  const handleSaveApiUrl = async () => {
+    if (!externalApiBaseUrl.trim()) {
+      setApiUrlMessage({ type: 'error', text: t('settings.error_url_empty', 'URL cannot be empty') })
+      return
+    }
+
+    if (!externalApiBaseUrl.startsWith('http://') && !externalApiBaseUrl.startsWith('https://')) {
+      setApiUrlMessage({ type: 'error', text: t('settings.error_url_invalid', 'URL must start with http:// or https://') })
+      return
+    }
+
+    setSavingApiUrl(true)
+    setApiUrlMessage(null)
+
+    try {
+      const result = await setExternalApiBaseUrl(externalApiBaseUrl)
+      if (result.success) {
+        setApiUrlMessage({
+          type: 'success',
+          text: t('settings.api_url_saved', 'API URL updated successfully. This change is temporary and will be reset on server restart.')
+        })
+        // Update config state with new URL
+        if (config) {
+          setConfig({
+            ...config,
+            sync: {
+              ...config.sync,
+              external_api_base_url: result.external_api_base_url
+            }
+          })
+        }
+      } else {
+        setApiUrlMessage({ type: 'error', text: result.message })
+      }
+    } catch (err) {
+      setApiUrlMessage({
+        type: 'error',
+        text: err instanceof Error ? err.message : t('settings.error_save_url', 'Failed to save API URL'),
+      })
+    } finally {
+      setSavingApiUrl(false)
+    }
+  }
+
+  // Handle save external API credentials
+  const handleSaveCredentials = async () => {
+    if (!apiUsername.trim()) {
+      setCredentialsMessage({ type: 'error', text: t('settings.error_username_empty', 'Username cannot be empty') })
+      return
+    }
+
+    if (!apiPassword.trim()) {
+      setCredentialsMessage({ type: 'error', text: t('settings.error_password_empty', 'Password cannot be empty') })
+      return
+    }
+
+    setSavingCredentials(true)
+    setCredentialsMessage(null)
+
+    try {
+      const result = await setExternalApiCredentials(apiUsername, apiPassword)
+      if (result.success) {
+        setCredentialsMessage({
+          type: 'success',
+          text: t('settings.credentials_saved', 'Credentials updated successfully. This change is temporary and will be reset on server restart.')
+        })
+        // Update config state with new username
+        if (config) {
+          setConfig({
+            ...config,
+            sync: {
+              ...config.sync,
+              external_api_username: result.username
+            }
+          })
+        }
+        // Clear password field after successful save
+        setApiPassword('')
+      } else {
+        setCredentialsMessage({ type: 'error', text: result.message })
+      }
+    } catch (err) {
+      setCredentialsMessage({
+        type: 'error',
+        text: err instanceof Error ? err.message : t('settings.error_save_credentials', 'Failed to save credentials'),
+      })
+    } finally {
+      setSavingCredentials(false)
     }
   }
 
@@ -565,16 +672,105 @@ export default function SettingsPage() {
               <label className="mb-1 block text-sm font-medium">
                 {t('settings.apiBaseUrl')}
               </label>
-              <input
-                type="text"
-                disabled
-                value={config?.sync.external_api_base_url || '-'}
-                className="w-full rounded-md border bg-secondary px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">
-                {t('settings.syncCron')}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={externalApiBaseUrl}
+                  onChange={(e) => setExternalApiBaseUrl(e.target.value)}
+                  placeholder="http://localhost:18000"
+                  className="flex-1 rounded-md border bg-background px-3 py-2 text-sm"
+                />
+                <button
+                  onClick={handleSaveApiUrl}
+                  disabled={savingApiUrl}
+                  className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {savingApiUrl ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  {t('common.save', 'Save')}
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('settings.apiBaseUrlHint', 'This change is temporary and will be reset on server restart. Takes effect immediately for the next sync.')}
+              </p>
+              {apiUrlMessage && (
+                <div
+                  className={`mt-2 rounded-md p-2 text-sm ${
+                    apiUrlMessage.type === 'success'
+                      ? 'bg-green-50 text-green-700 border border-green-200'
+                      : 'bg-red-50 text-red-700 border border-red-200'
+                  }`}
+                >
+                  {apiUrlMessage.text}
+                    </div>
+                  )}
+                </div>
+    
+                {/* API Credentials */}
+                <div className="border-t pt-4">
+                  <label className="mb-1 block text-sm font-medium">
+                    {t('settings.apiCredentials', 'API Credentials')}
+                  </label>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="mb-1 block text-xs text-muted-foreground">
+                        {t('settings.apiUsername', 'Username')}
+                      </label>
+                      <input
+                        type="text"
+                        value={apiUsername}
+                        onChange={(e) => setApiUsername(e.target.value)}
+                        placeholder="admin"
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-muted-foreground">
+                        {t('settings.apiPassword', 'Password')}
+                      </label>
+                      <input
+                        type="password"
+                        value={apiPassword}
+                        onChange={(e) => setApiPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <button
+                      onClick={handleSaveCredentials}
+                      disabled={savingCredentials}
+                      className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                    >
+                      {savingCredentials ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4" />
+                      )}
+                      {t('settings.saveCredentials', 'Save Credentials')}
+                    </button>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t('settings.apiCredentialsHint', 'These credentials are used for authentication with the external API. Changes are temporary and will be reset on server restart.')}
+                  </p>
+                  {credentialsMessage && (
+                    <div
+                      className={`mt-2 rounded-md p-2 text-sm ${
+                        credentialsMessage.type === 'success'
+                          ? 'bg-green-50 text-green-700 border border-green-200'
+                          : 'bg-red-50 text-red-700 border border-red-200'
+                      }`}
+                    >
+                      {credentialsMessage.text}
+                    </div>
+                  )}
+                </div>
+    
+                <div>
+                  <label className="mb-1 block text-sm font-medium">
+                    {t('settings.syncCron')}
               </label>
               <input
                 type="text"

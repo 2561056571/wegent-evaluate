@@ -6,6 +6,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:1
 
 export interface SyncConfig {
   external_api_base_url: string
+  external_api_username: string
   sync_cron_expression: string
 }
 
@@ -21,8 +22,44 @@ export interface SettingsConfig {
   evaluation: EvaluationConfig
 }
 
+export interface SetExternalApiBaseUrlResponse {
+  success: boolean
+  message: string
+  external_api_base_url: string
+}
+
+export interface SetExternalApiCredentialsResponse {
+  success: boolean
+  message: string
+  username: string
+}
+
 export async function getSettingsConfig(): Promise<SettingsConfig> {
   const response = await fetch(`${API_BASE_URL}/api/settings/config`)
   if (!response.ok) throw new Error('Failed to get settings config')
+  return response.json()
+}
+
+export async function setExternalApiBaseUrl(url: string): Promise<SetExternalApiBaseUrlResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/settings/external-api-base-url`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ external_api_base_url: url }),
+  })
+  if (!response.ok) throw new Error('Failed to set external API base URL')
+  return response.json()
+}
+
+export async function setExternalApiCredentials(username: string, password: string): Promise<SetExternalApiCredentialsResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/settings/external-api-credentials`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ username, password }),
+  })
+  if (!response.ok) throw new Error('Failed to set external API credentials')
   return response.json()
 }

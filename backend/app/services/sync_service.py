@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.auth_client import auth_client
+from app.core.runtime_config import get_external_api_base_url
 from app.models import ConversationRecord, DataVersion, EvaluationStatus, SyncJob, SyncStatus
 from app.schemas.external_api import QAHistoryItem, QAHistoryResponse
 from app.services.version_service import VersionService
@@ -188,7 +189,7 @@ class SyncService:
         page_size: int,
     ) -> tuple[List[QAHistoryItem], any]:
         """Fetch a single page of QA history data from external API."""
-        url = f"{settings.EXTERNAL_API_BASE_URL}{settings.EXTERNAL_API_QA_HISTORY_PATH}"
+        url = f"{get_external_api_base_url()}{settings.EXTERNAL_API_QA_HISTORY_PATH}"
 
         # Format time as required by the API (YYYY-MM-DD HH:MM:SS format)
         params = {

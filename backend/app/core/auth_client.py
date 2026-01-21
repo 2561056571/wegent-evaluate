@@ -8,6 +8,11 @@ import httpx
 import structlog
 
 from app.core.config import settings
+from app.core.runtime_config import (
+    get_external_api_base_url,
+    get_external_api_username,
+    get_external_api_password,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -18,9 +23,27 @@ class AuthClient:
     def __init__(self):
         self._token: Optional[str] = None
         self._token_expires_at: float = 0
+        self._last_base_url: Optional[str] = None
+        self._last_username: Optional[str] = None
+        self._last_password: Optional[str] = None
 
     async def get_access_token(self) -> str:
         """Get a valid access token, refreshing if necessary."""
+        current_base_url = get_external_api_base_url()
+        current_username = get_external_api_username()
+        current_password = get_external_api_password()
+        
+        # If any credential changed, invalidate the token
+        credentials_changed = (
+            (self._last_base_url is not None and self._last_base_url != current_base_url) or
+            (self._last_username is not None and self._last_username != current_username) or
+            (self._last_password is not None and self._last_password != current_password)
+        )
+        
+        if credentials_changed:
+            self._token = None
+            self._token_expires_at = 0
+        
         if self._is_token_valid():
             return self._token
 
@@ -36,7 +59,10 @@ class AuthClient:
 
     async def _fetch_new_token(self) -> None:
         """Fetch a new access token by logging in with username and password."""
-        login_url = f"{settings.EXTERNAL_API_BASE_URL}{settings.EXTERNAL_API_LOGIN_PATH}"
+        base_url = get_external_api_base_url()
+        username = get_external_api_username()
+        password = get_external_api_password()
+        login_url = f"{base_url}{settings.EXTERNAL_API_LOGIN_PATH}"
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:
@@ -44,8 +70,8 @@ class AuthClient:
                 response = await client.post(
                     login_url,
                     json={
-                        "user_name": settings.EXTERNAL_API_USERNAME,
-                        "password": settings.EXTERNAL_API_PASSWORD,
+                        "user_name": username,
+                        "password": password,
                     },
                     headers={"Content-Type": "application/json"},
                 )
@@ -60,10 +86,15 @@ class AuthClient:
                 # Default to 1 hour if not specified
                 expires_in = token_data.get("expires_in", 3600)
                 self._token_expires_at = time.time() + expires_in
+                
+                # Remember the credentials used for this token
+                self._last_base_url = base_url
+                self._last_username = username
+                self._last_password = password
 
                 logger.info(
                     "Successfully obtained JWT token",
-                    username=settings.EXTERNAL_API_USERNAME,
+                    username=username,
                     expires_in=expires_in,
                 )
 

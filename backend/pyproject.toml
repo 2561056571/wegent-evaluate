@@ -2,7 +2,6 @@
 name = "wegent-evaluate"
 version = "1.0.0"
 description = "RAG Evaluation Service for Wegent"
-readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     # FastAPI framework
@@ -35,6 +34,9 @@ dependencies = [
     "structlog>=23.1.0",
     "python-dateutil>=2.8.2",
 ]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
 
 [dependency-groups]
 dev = [
